@@ -1,42 +1,51 @@
-import re
-import PyPDF2
+import io
+from validator import Validator
+from pdfminer.pdfinterp import PDFResourceManager, PDFPageInterpreter
+from pdfminer.converter import TextConverter
+from pdfminer.layout import LAParams
+from pdfminer.pdfpage import PDFPage
 
 
-def extract_pdf_info(file_path):
-    # Open the PDF file and read it
-    pdf_info = {}
-    text_dict = {}
-    pdf_file = open(file_path, 'rb')
-    pdf_reader = PyPDF2.PdfReader(pdf_file)
+class Extractor:
+    result_dict = {}
+    device = None
 
-    # Count the number of pages
-    pdf_info['TotalPages'] = len(pdf_reader.pages)
+    @staticmethod
+    def pdf_to_text(path):
+        resource_manager = PDFResourceManager()
+        text_stream = io.StringIO()
+        laparams = LAParams()
+        Extractor.device = TextConverter(resource_manager, text_stream, laparams=laparams)
 
-    # Extract text from each page
-    text = ''
-    for page_num in range(len(pdf_reader.pages)):
-        page = pdf_reader.pages[page_num]
-        text += page.extract_text()
+        with open(path, 'rb') as pdf_file:
+            interpreter = PDFPageInterpreter(resource_manager, Extractor.device)
 
-    # Stripping the list of multiple spaces and according to the needed delimiters
-    text = re.split('[:\n]', re.sub(' +', ' ', text))
+            for page in PDFPage.get_pages(pdf_file, check_extractable=True):
+                interpreter.process_page(page)
 
-    # Transforming the split list into dict, while getting rid of leading and trailing whitespaces
-    for word in range(0, len(text)-1, 2):
-        text_dict[text[word].lstrip().rstrip()] = text[word + 1].lstrip().rstrip()
+        text = text_stream.getvalue()
 
-    # Removing empty items and splitting other items where necessary
-    for key, value in dict(text_dict).items():
-        if value == '' or key == '':
-            del text_dict[key]
+        Extractor.device.close()
+        text_stream.close()
 
-    pdf_info['Text'] = text_dict
-    pdf_file.close()
+        return text
 
-    return pdf_info
+    @staticmethod
+    def extract_pdf_info(file_path):
+        pdf_text = Extractor.pdf_to_text(file_path)
+
+        lines = pdf_text.split('\n')
+        for line in lines:
+            if ':' in line:
+                key, value = line.split(':', 1)
+                Extractor.result_dict[key.strip()] = value.strip()
+
+        return Extractor.result_dict
 
 
 if __name__ == '__main__':
     pdf_file_path = '~/Downloads/test_task.pdf'  # example location
-    result = extract_pdf_info(pdf_file_path)
+    result = Extractor.extract_pdf_info(pdf_file_path)
     print(result)
+
+    Validator.check_pdf_structure(pdf_file_path, Extractor.result_dict)
