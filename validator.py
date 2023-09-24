@@ -1,26 +1,13 @@
-import PyPDF2
+from extractor import Extractor
+from deepdiff import DeepDiff
 
 
 class Validator:
 
     @staticmethod
-    def check_pdf_structure(filename, original_dict):
-        required_elements = [key for key in original_dict]
-        missing_elements = []
+    def check_pdf_structure(original_file_path, testing_file_path):
+        original_dict = Extractor.extract_pdf_info(original_file_path)
+        testing_dict = Extractor.extract_pdf_info(testing_file_path)
 
-        with open(filename, 'rb') as file:
-            reader = PyPDF2.PdfReader(file)
-
-            for page in reader.pages:
-                text = page.extract_text()
-
-                for element in required_elements:
-                    if element not in text:
-                        missing_elements.append(element)
-
-        if not missing_elements:
-            print("All elements are present and in compliance with the structure.")
-        else:
-            print("Missing elements or structure non-compliance:")
-            for element in missing_elements:
-                print("- " + element)
+        diff = DeepDiff(original_dict, testing_dict)
+        return diff
